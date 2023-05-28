@@ -6,18 +6,23 @@ package main
 // go run mrsequential.go wc.so pg*.txt
 //
 
-import "fmt"
-import "6.824/mr"
-import "plugin"
-import "os"
-import "log"
-import "io/ioutil"
-import "sort"
+import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"plugin"
+	"sort"
+
+	"6.824/mr"
+)
 
 // for sorting by key.
+// 即typedef，在mr目录下的一个struct类型，在这里包装成struct数组类型
 type ByKey []mr.KeyValue
 
 // for sorting by key.
+// ByKey类型的一些辅助函数
 func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
@@ -37,16 +42,22 @@ func main() {
 	//
 	intermediate := []mr.KeyValue{}
 	for _, filename := range os.Args[2:] {
+		// file是一个File* 类型，文件指针
 		file, err := os.Open(filename)
 		if err != nil {
 			log.Fatalf("cannot open %v", filename)
 		}
+		// 使用标准输入输出流从文件指针处读取内容，字节流的形式
 		content, err := ioutil.ReadAll(file)
 		if err != nil {
 			log.Fatalf("cannot read %v", filename)
 		}
 		file.Close()
+
+		// 调用mapfunction，执行map任务，
 		kva := mapf(filename, string(content))
+
+		// append函数可以做元素加到数组中，也可以做数组的合并，这里使用了...，所以是数组的合并
 		intermediate = append(intermediate, kva...)
 	}
 
@@ -55,9 +66,10 @@ func main() {
 	// intermediate data is in one place, intermediate[],
 	// rather than being partitioned into NxM buckets.
 	//
-
+	// 按key排序
 	sort.Sort(ByKey(intermediate))
 
+	//创建输出文件，是reduce的结果
 	oname := "mr-out-0"
 	ofile, _ := os.Create(oname)
 
@@ -65,6 +77,8 @@ func main() {
 	// call Reduce on each distinct key in intermediate[],
 	// and print the result to mr-out-0.
 	//
+
+	// 遍历internediate，相同的key的Value堆在一个数组里，然后把key和对应的数组扔进reduce function
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1

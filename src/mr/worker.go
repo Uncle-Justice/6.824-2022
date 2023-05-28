@@ -1,10 +1,12 @@
 package mr
 
-import "fmt"
-import "log"
-import "net/rpc"
-import "hash/fnv"
-
+import (
+	"fmt"
+	"hash/fnv"
+	"log"
+	"net/rpc"
+	"time"
+)
 
 //
 // Map functions return a slice of KeyValue.
@@ -24,17 +26,78 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-
 //
 // main/mrworker.go calls this function.
 //
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
+	alive := true
+	for alive {
+		task := GetTask()
+		// go默认每一个case会自动break
+		switch task.TaskType {
+		case MapTask:
+			{
+				fmt.Print("*****************Map****************")
+				DoMapTask(mapf, &task)
+				CallDone(&task)
+			}
+		case ReduceTask:
+			{
+				fmt.Print("*****************Reduce****************")
+				DoReduceTask(reducef, &task)
+				CallDone(&task)
+			}
+		case WaitTask:
+			{
+				// 目前所有的任务都有worker在做，所以现在就等着coordinator那边传done
+				time.Sleep(time.Second * 3)
+				fmt.Println("all tasks in progress, waiting...")
+			}
+		case ExitTask:
+			{
+				time.Sleep(time.Second)
+				fmt.Println("All task done, will be exiting...")
+				alive = false
+			}
 
-	// Your worker implementation here.
+		}
+	}
+	time.Sleep(time.Second)
+}
 
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
+func DoMapTask(reducef func(string, string) []KeyValue, response *Task) {
+	fmt.Println("DoMapTask")
+}
+func DoReduceTask(reducef func(string, []string) string, response *Task) {
+	fmt.Println("DoReduceTask")
+}
+
+func GetTask() Task {
+	args := TaskArgs{}
+	reply := Task{}
+
+	ok := call("Coordinator.PollTask", &args, &reply)
+
+	if ok {
+		fmt.Println("worker get ", reply.TaskType, "task :Id[", reply.TaskId, "]")
+	} else {
+		fmt.Printf("call failed!\n")
+	}
+	return reply
+}
+
+func CallDone(task *Task) {
+	args := task
+	reply := Task{}
+
+	ok := call("Coordinator.MarkFinished", &args, &reply)
+
+	if ok {
+		fmt.Println("worker mark finished.")
+	} else {
+		fmt.Printf("call failed!\n")
+	}
 
 }
 

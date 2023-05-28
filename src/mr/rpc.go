@@ -6,8 +6,11 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
-import "strconv"
+import (
+	"os"
+	"strconv"
+	// "strings"
+)
 
 //
 // example to show how to declare the arguments
@@ -23,7 +26,45 @@ type ExampleReply struct {
 }
 
 // Add your RPC definitions here.
+type TaskArgs struct{}
+type Task struct {
+	TaskType TaskType
+	TaskId   int
 
+	// for reduce
+	ReducerNum int
+
+	// for map
+	FileSlice []string
+}
+
+type TaskType int
+
+// 第一行iota就是0的意思，后面的值自增
+const (
+	MapTask TaskType = iota
+	ReduceTask
+	WaitTask
+	ExitTask
+)
+
+// Phase 对于分配任务阶段的父类型
+type Phase int
+
+// State 任务的状态的父类型
+type TaskState int
+
+const (
+	MapPhase    Phase = iota // 此阶段在分发MapTask
+	ReducePhase              // 此阶段在分发ReduceTask
+	AllDone                  // 此阶段已完成
+)
+
+const (
+	Working TaskState = iota
+	Waiting
+	Done
+)
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.

@@ -2,7 +2,11 @@ package mr
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
 	"sync"
+
 	// "go/printer"
 	"log"
 	"net"
@@ -11,10 +15,10 @@ import (
 	"os"
 	"time"
 )
+
 var (
 	mu sync.Mutex
 )
-
 
 type Coordinator struct {
 	ReducerNum        int        // 传入的参数决定需要多少个reducer
@@ -109,10 +113,10 @@ func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
 			// 防止重复的worker返回同一个task，所以不能直接把哈希的对应TaskType改成Done，而是要先查，判断一下
 			meta, ok := c.taskMetaHolder.MetaMap[args.TaskId]
 			if ok && meta.taskState == Working {
-				fmt.Println("done")
+				// fmt.Println("done")
 				meta.taskState = Done
 			} else {
-				fmt.Printf("duplicate map worker done in task Id[%v]", args.TaskId)
+				// fmt.Printf("duplicate map worker done in task Id[%v]", args.TaskId)
 			}
 		}
 	case ReducePhase:
@@ -123,14 +127,14 @@ func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
 				meta.taskState = Done
 			} else {
 
-				fmt.Printf("duplicate reduce worker done in task Id[%v]", args.TaskId)
+				// fmt.Printf("duplicate reduce worker done in task Id[%v]", args.TaskId)
 			}
 		}
 	default:
 		panic("The task type undefined ! ! !")
 	}
 
-	fmt.Printf("task %v finished\n", args.TaskId)
+	// fmt.Printf("task %v finished\n", args.TaskId)
 	return nil
 }
 
@@ -156,7 +160,7 @@ func (c *Coordinator) server() {
 //
 func (c *Coordinator) Done() bool {
 	mu.Lock()
-    defer mu.Unlock()
+	defer mu.Unlock()
 	// Your code here.
 	// 检查所有任务是否完成
 	if c.DistPhase == AllDone {
@@ -219,23 +223,36 @@ func (c *Coordinator) MakeMapTasks() {
 
 func (c *Coordinator) MakeReduceTasks() {
 	// for range这种格式，如果我for两个变量，前一个_就是下标，后一个就是元素
-	for _, v := range c.files {
-		id := c.GenerateTaskId()
-		task := Task{
-			TaskType:   ReduceTask,
-			TaskId:     id,
-			ReducerNum: c.ReducerNum,
-			// 切片的赋值要按这个格式写
-			FileSlice: []string{v},
-		}
+
+	// 和MakeMapTasks不同,这里写进Task的文件名是特定reduceNum为后缀的所有文件名集合
+for  i := 0; i < c.ReducerNum; i++{
+	id := c.GenerateTaskId()
+	task := Task{
+		TaskId: id,
+		TaskType: ReduceTask,
+		FileSlice: selectReduceName(i),
+	}
 		taskMetaInfo := TaskMetaInfo{
 			taskState: Waiting,
 			TaskAdr:   &task,
 		}
+
 		c.taskMetaHolder.acceptMeta(&taskMetaInfo)
 		c.ReduceTaskChannel <- &task
 		// 把这个task扔到channel里去
 	}
+}
+func selectReduceName(reduceNum int) []string {
+	var s []string
+	path, _ := os.Getwd()
+	files, _ := ioutil.ReadDir(path)
+	for _, fi := range files {
+		// 匹配对应的reduce文件
+		if strings.HasPrefix(fi.Name(), "mr-tmp") && strings.HasSuffix(fi.Name(), strconv.Itoa(reduceNum)) {
+			s = append(s, fi.Name())
+		}
+	}
+	return s
 }
 
 func (c *Coordinator) GenerateTaskId() int {
@@ -245,7 +262,7 @@ func (c *Coordinator) GenerateTaskId() int {
 
 func (c *Coordinator) toNextPhase() {
 	mu.Lock()
-    defer mu.Unlock()
+	defer mu.Unlock()
 	if c.DistPhase == MapPhase {
 		c.MakeReduceTasks()
 		c.DistPhase = ReducePhase
@@ -293,12 +310,12 @@ func (t *TaskMetaHolder) checkAllTaskDone() bool {
 
 	}
 	if (mapDoneNum > 0 && mapUndoneNum == 0) && (reduceDoneNum == 0 && reduceUndoneNum == 0) {
-		fmt.Println("map tasks all done")
+		// fmt.Println("map tasks all done")
 		return true
 	} else if reduceDoneNum > 0 && reduceUndoneNum == 0 {
 		return true
 	} else {
-		fmt.Println("map tasks not all done")
+		// fmt.Println("map tasks not all done")
 		return false
 	}
 

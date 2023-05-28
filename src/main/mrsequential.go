@@ -78,7 +78,8 @@ func main() {
 	// and print the result to mr-out-0.
 	//
 
-	// 遍历internediate，相同的key的Value堆在一个数组里，然后把key和对应的数组扔进reduce function
+	// 遍历internediate，相同的key的Value堆在一个数组里，这也是map的工作范围
+	// 然后把key和对应的数组扔进reduce function
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1

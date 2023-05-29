@@ -56,6 +56,8 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 }
 
 func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
+	mu.Lock()
+	defer mu.Unlock()
 	switch c.DistPhase {
 	case MapPhase:
 		{
@@ -107,6 +109,8 @@ func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
 }
 
 func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
+	mu.Lock()
+	defer mu.Unlock()
 	switch c.DistPhase {
 	case MapPhase:
 		{
@@ -225,13 +229,13 @@ func (c *Coordinator) MakeReduceTasks() {
 	// for range这种格式，如果我for两个变量，前一个_就是下标，后一个就是元素
 
 	// 和MakeMapTasks不同,这里写进Task的文件名是特定reduceNum为后缀的所有文件名集合
-for  i := 0; i < c.ReducerNum; i++{
-	id := c.GenerateTaskId()
-	task := Task{
-		TaskId: id,
-		TaskType: ReduceTask,
-		FileSlice: selectReduceName(i),
-	}
+	for i := 0; i < c.ReducerNum; i++ {
+		id := c.GenerateTaskId()
+		task := Task{
+			TaskId:    id,
+			TaskType:  ReduceTask,
+			FileSlice: selectReduceName(i),
+		}
 		taskMetaInfo := TaskMetaInfo{
 			taskState: Waiting,
 			TaskAdr:   &task,
@@ -261,8 +265,7 @@ func (c *Coordinator) GenerateTaskId() int {
 }
 
 func (c *Coordinator) toNextPhase() {
-	mu.Lock()
-	defer mu.Unlock()
+
 	if c.DistPhase == MapPhase {
 		c.MakeReduceTasks()
 		c.DistPhase = ReducePhase
@@ -288,6 +291,7 @@ func (t *TaskMetaHolder) acceptMeta(TaskInfo *TaskMetaInfo) bool {
 
 // MapTask全部Done了或者ReduceTask全部done就返回true，其他情况返回false
 func (t *TaskMetaHolder) checkAllTaskDone() bool {
+
 	// 这里用不到k，如果写for k, v会报错，就要把k改成下划线
 	mapDoneNum := 0
 	mapUndoneNum := 0

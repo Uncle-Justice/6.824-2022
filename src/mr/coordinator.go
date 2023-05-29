@@ -69,12 +69,14 @@ func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
 				// 这里看别人额外做了个判断，如果这个task不是waiting状态要补一个输出，暂时没搞懂为什么要这样做
 				// 感觉可以直接改working就完事了
 				c.taskMetaHolder.MetaMap[reply.TaskId].taskState = Working
+				c.taskMetaHolder.MetaMap[reply.TaskId].StartTime = time.Now()
 			} else {
 				// 如果管道已经空了，就返回一个Waiting的Task
 				// 并且判断是不是所有map任务都结束了，如果确实全部做完了，就要切到下一个phase
 
 				reply.TaskType = WaitTask
 				if c.taskMetaHolder.checkAllTaskDone() {
+					fmt.Println("to reduce phase")
 					c.toNextPhase()
 				}
 				return nil
@@ -85,6 +87,7 @@ func (c *Coordinator) PollTask(args *TaskArgs, reply *Task) error {
 			if len(c.ReduceTaskChannel) > 0 {
 				*reply = *<-c.ReduceTaskChannel
 				c.taskMetaHolder.MetaMap[reply.TaskId].taskState = Working
+				c.taskMetaHolder.MetaMap[reply.TaskId].StartTime = time.Now()
 			} else {
 				// 如果管道已经空了，就返回一个Waiting的Task
 				// 并且判断是不是所有map任务都结束了，如果确实全部做完了，就要切到下一个phase
@@ -134,6 +137,9 @@ func (c *Coordinator) MarkFinished(args *Task, reply *Task) error {
 				// fmt.Printf("duplicate reduce worker done in task Id[%v]", args.TaskId)
 			}
 		}
+	case AllDone:{
+		fmt.Printf("duplicate worker done in task Id[%v]", args.TaskId)
+	}
 	default:
 		panic("The task type undefined ! ! !")
 	}
@@ -200,6 +206,8 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.MakeMapTasks()
 
 	c.server()
+
+	go c.CrashDetector()
 	fmt.Println("server started")
 	return &c
 }
@@ -314,13 +322,43 @@ func (t *TaskMetaHolder) checkAllTaskDone() bool {
 
 	}
 	if (mapDoneNum > 0 && mapUndoneNum == 0) && (reduceDoneNum == 0 && reduceUndoneNum == 0) {
-		// fmt.Println("map tasks all done")
+		fmt.Println("map tasks all done")
 		return true
 	} else if reduceDoneNum > 0 && reduceUndoneNum == 0 {
 		return true
 	} else {
-		// fmt.Println("map tasks not all done")
+		fmt.Println("map tasks not all done")
 		return false
+	}
+
+}
+
+func (c *Coordinator) CrashDetector() {
+
+	// 相当于while(true)， 但是写for(true)是非法的
+	for {
+		time.Sleep(time.Second * 2)
+		mu.Lock()
+		if c.DistPhase == AllDone {
+			mu.Unlock()
+			break
+		}
+
+		for _, v := range c.taskMetaHolder.MetaMap {
+			if v.taskState == Working && time.Since(v.StartTime) > 15*time.Second {
+				fmt.Println("crash detected")
+				switch v.TaskAdr.TaskType {
+				case MapTask:
+					c.MapTaskChannel <- v.TaskAdr
+					v.taskState = Waiting
+				case ReduceTask:
+					c.ReduceTaskChannel <- v.TaskAdr
+					v.taskState = Waiting
+				}
+
+			}
+		}
+		mu.Unlock()
 	}
 
 }

@@ -159,7 +159,10 @@ func DoReduceTask(reducef func(string, []string) string, response *Task) {
 	tempFile.Close()
 	// 在完全写入后进行重命名
 	fn := fmt.Sprintf("mr-out-%d", reduceOutputFileID)
-	os.Rename(tempFile.Name(), fn)
+	err = os.Rename(tempFile.Name(), fn)
+	if err !=nil{
+		panic("Failed to rename temp file")
+	}
 }
 
 // 把那些reduce后缀相同的intermediate文件都读进一个kv数组,按key排序之后返回
